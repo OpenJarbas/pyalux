@@ -26,9 +26,21 @@ class NotVideoUrlException(UnknownUrlException):
     pass
 
 
+class NotNetworthUrlException(UnknownUrlException):
+    pass
+
+
+class NotRichestUrlException(UnknownUrlException):
+    pass
+
+
 class BadPostException(PyAluxException):
     pass
 
 
-class NoVideosFoundException(PyAluxException):
+class NoVideosFoundException(NoArticlesFoundException):
+    pass
+
+
+class NoRichestFoundException(NoArticlesFoundException):
     pass

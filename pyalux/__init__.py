@@ -2,7 +2,9 @@ import requests
 from bs4 import BeautifulSoup
 from pyalux.exceptions import InvalidCategoryException, InvalidTagException, \
     UnknownPageFormatException, NoArticlesFoundException, \
-    UnknownUrlException, BadPostException, NoVideosFoundException, NotVideoUrlException
+    UnknownUrlException, BadPostException, NoVideosFoundException, \
+    NotVideoUrlException, NotNetworthUrlException, NoRichestFoundException, \
+    NotRichestUrlException
 
 
 class Alux(object):
@@ -31,7 +33,12 @@ class Alux(object):
         return Alux.num_pages(url)
 
     @staticmethod
-    def get_posts(soup):
+    def num_rich_pages():
+        url = "https://www.alux.com/networth/page/1"
+        return Alux.num_pages(url)
+
+    @staticmethod
+    def _get_posts(soup):
         if isinstance(soup, str) and soup.startswith("http"):
             soup = Alux._get_soup(Alux._get_html(soup))
         # main page
@@ -42,6 +49,7 @@ class Alux(object):
             if not el:
                 # tag / search pages
                 el = soup.find("div", {"class": "grid-listing"})
+
         if not el:
             raise UnknownPageFormatException
         articles = el.find_all("article")
@@ -67,7 +75,7 @@ class Alux(object):
 
     @staticmethod
     def crawl(base_url="http://www.alux.com", page=1, last_page=1,
-              total_pages=None):
+              total_pages=None, soup_handler=None):
         if requests.get(base_url, verify=False).status_code == 404:
             raise UnknownUrlException
         total_pages = total_pages or Alux.num_pages()
@@ -92,7 +100,8 @@ class Alux(object):
             last_page = 1
             page = 2
 
-        for a in Alux.get_posts(soup):
+        soup_handler = soup_handler or Alux._get_posts
+        for a in soup_handler(soup):
             yield a
 
         if last_page > 0 and page > last_page:
@@ -161,14 +170,14 @@ class Alux(object):
         url = "https://www.alux.com/category/" + category
         if requests.get(url, verify=False).status_code == 404:
             raise InvalidCategoryException
-        for post in Alux.get_posts(url):
+        for post in Alux._get_posts(url):
             yield post
 
     @staticmethod
     def search_by_tag(tag):
         url = "https://www.alux.com/tag/" + tag
         try:
-            for post in Alux.get_posts(url):
+            for post in Alux._get_posts(url):
                 yield post
         except UnknownPageFormatException:
             raise InvalidTagException
@@ -177,13 +186,13 @@ class Alux(object):
     def search(query):
         url = "https://www.alux.com/?s=" + query
         try:
-            for post in Alux.get_posts(url):
+            for post in Alux._get_posts(url):
                 yield post
         except UnknownPageFormatException:
             raise NoArticlesFoundException
 
     @staticmethod
-    def get_videos(soup):
+    def _get_videos(soup):
         if isinstance(soup, str) and soup.startswith("http"):
             soup = Alux._get_soup(Alux._get_html(soup))
         el = soup.find("div", {"class": "video-listing"})
@@ -218,26 +227,211 @@ class Alux(object):
     def top_videos():
         url = "https://www.alux.com/"
         soup = Alux._get_soup(Alux._get_html(url))
-        for v in Alux.get_videos(soup):
+        for v in Alux._get_videos(soup):
             yield v
 
     @staticmethod
     def trending_videos():
         url = "https://www.alux.com/videos"
         soup = Alux._get_soup(Alux._get_html(url))
-        for v in Alux.get_videos(soup):
+        for v in Alux._get_videos(soup):
             yield v
 
     @staticmethod
     def hottest_videos():
         url = "https://www.alux.com/videos/?sort=hottest"
         soup = Alux._get_soup(Alux._get_html(url))
-        for v in Alux.get_videos(soup):
+        for v in Alux._get_videos(soup):
             yield v
 
     @staticmethod
     def latest_videos():
         url = "https://www.alux.com/videos/?sort=latest"
         soup = Alux._get_soup(Alux._get_html(url))
-        for v in Alux.get_videos(soup):
+        for v in Alux._get_videos(soup):
             yield v
+
+    @staticmethod
+    def parse_networth(url):
+        if "/networth/" not in url:
+            raise NotNetworthUrlException
+        soup = Alux._get_soup(Alux._get_html(url))
+        info = soup.find("div", {"class": "the-info"})
+        if info is None:
+            raise BadPostException
+        name = info.find("h4").text
+        networth = info.find("p", {"class": "networth"}).text \
+            .replace("Net Worth", "").strip()
+        salary = info.find("p", {"class": "salary"}).text \
+            .replace("Salary:", "").strip()
+        info = info.find_all("li")
+        bucket = {"url": url, "name": name, "networth": networth,
+                  "salary": salary}
+        for i in info:
+            key = i.find("span").text.replace(":", "").strip()
+            a = i.find("a")
+            if a is not None:
+                data = a.text
+                data_url = a["href"]
+            else:
+                data = i.text.replace(key + ":", "").strip()
+                data_url = url
+            bucket[key.lower().strip()] = data
+        text = soup.find("div", {"class": "celebrity-content"}).text
+        bucket["info"] = text.strip()
+        return bucket
+
+    @staticmethod
+    def richest_politicians():
+        url = "https://www.alux.com/richest/politician/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_producers():
+        url = "https://www.alux.com/richest/producer/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_presidents():
+        url = "https://www.alux.com/richest/president/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_talk_show_hosts():
+        url = "https://www.alux.com/richest/talk-show-host/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_directors():
+        url = "https://www.alux.com/richest/director/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_youtube_personalities():
+        url = "https://www.alux.com/richest/youtube-personality/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_lyricists():
+        url = "https://www.alux.com/richest/lyricist/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_stuntmans():
+        url = "https://www.alux.com/richest/stuntman/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_athletes():
+        url = "https://www.alux.com/richest/athlete/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_boxers():
+        url = "https://www.alux.com/richest/boxer/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_record_producers():
+        url = "https://www.alux.com/richest/record-producers/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_entrepeneurs():
+        url = "https://www.alux.com/richest/entrepeneur/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_socialites():
+        url = "https://www.alux.com/richest/socialite/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_entertainers():
+        url = "https://www.alux.com/richest/entertainer/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_songwriters():
+        url = "https://www.alux.com/richest/songwriter/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_authors():
+        url = "https://www.alux.com/richest/author/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_businessman():
+        url = "https://www.alux.com/richest/businessman"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_television_hosts():
+        url = "https://www.alux.com/richest/television-host/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_media_proprietors():
+        url = "https://www.alux.com/richest/media-proprietor/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def richest_basketball_players():
+        url = "https://www.alux.com/richest/basketball-player/"
+        return Alux.parse_richest(url)
+
+    @staticmethod
+    def parse_richest(url):
+        if "/richest/" not in url:
+            raise NotRichestUrlException
+        soup = Alux._get_soup(Alux._get_html(url))
+        for rich in Alux._get_rich(soup):
+            yield rich
+
+    @staticmethod
+    def _get_rich(soup):
+        if isinstance(soup, str) and soup.startswith("http"):
+            soup = Alux._get_soup(Alux._get_html(soup))
+        el = soup.find("div", {"class": "celebrity-listing"})
+        if not el:
+            raise NoRichestFoundException
+        for rich in el.find_all("article"):
+            url = rich.find("a")["href"]
+            pic = rich.find("img")["src"]
+            name = rich.find("h3", {"class": "celeb-title"}).text \
+                .replace("Net Worth", "").strip()
+            yield {"url": url, "pic": pic, "name": name}
+
+    @staticmethod
+    def random_rich():
+        url = "https://www.alux.com/networth/"
+        soup = Alux._get_soup(Alux._get_html(url))
+        url = soup.find("a", {"class": "randomceleb"})["href"]
+        return Alux.parse_networth(url)
+
+    @staticmethod
+    def trending_riches():
+        url = "https://www.alux.com/networth/"
+        soup = Alux._get_soup(Alux._get_html(url))
+        soup = soup.find("div", {"class": "trending-celebs"})
+        return Alux._get_rich(soup)
+
+    @staticmethod
+    def latest_riches():
+        url = "https://www.alux.com/networth/"
+        soup = Alux._get_soup(Alux._get_html(url))
+        soup = soup.find("div", {"class": "latest-celebs"})
+        return Alux._get_rich(soup)
+
+    @staticmethod
+    def crawl_riches(page=1, last_page=1):
+        url = "https://www.alux.com/networth/"
+
+        def handler(soup):
+            soup = soup.find("div", {"class": "latest-celebs"})
+            return Alux._get_rich(soup)
+
+        for p in Alux.crawl(url, page, last_page, Alux.num_rich_pages(),
+                            soup_handler=handler):
+            yield p

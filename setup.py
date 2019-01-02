@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='pyalux',
-    version='0.2',
+    version='0.3',
     packages=['pyalux'],
     install_requires=['requests', 'bs4'],
     url='https://github.com/JarbasAl/pyalux',
