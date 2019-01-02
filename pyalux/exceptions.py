@@ -21,5 +21,14 @@ class NoArticlesFoundException(PyAluxException):
 class UnknownUrlException(PyAluxException):
     pass
 
+
+class NotVideoUrlException(UnknownUrlException):
+    pass
+
+
 class BadPostException(PyAluxException):
+    pass
+
+
+class NoVideosFoundException(PyAluxException):
     pass

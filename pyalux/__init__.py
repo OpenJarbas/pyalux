@@ -2,7 +2,7 @@ import requests
 from bs4 import BeautifulSoup
 from pyalux.exceptions import InvalidCategoryException, InvalidTagException, \
     UnknownPageFormatException, NoArticlesFoundException, \
-    UnknownUrlException, BadPostException
+    UnknownUrlException, BadPostException, NoVideosFoundException, NotVideoUrlException
 
 
 class Alux(object):
@@ -181,3 +181,63 @@ class Alux(object):
                 yield post
         except UnknownPageFormatException:
             raise NoArticlesFoundException
+
+    @staticmethod
+    def get_videos(soup):
+        if isinstance(soup, str) and soup.startswith("http"):
+            soup = Alux._get_soup(Alux._get_html(soup))
+        el = soup.find("div", {"class": "video-listing"})
+        if not el:
+            el = soup.find("div", {"class": "post-listing"})
+            if not el:
+                raise NoVideosFoundException
+
+        videos = soup.find_all("li", {"class": "video-widget wideimg"})
+        if not videos:
+            videos = el.find_all("article")
+            if not videos:
+                raise NoVideosFoundException
+
+        for v in videos:
+            v = v.find("div", {"class": "post-img"})
+            url = v.find("a")["href"]
+            pic = v.find("img")["src"]
+            title = v.find("a")["title"]
+            yield {"url": url, "pic": pic, "title": title}
+
+    @staticmethod
+    def parse_video(url):
+        if "/video/" not in url:
+            raise NotVideoUrlException
+        soup = Alux._get_soup(Alux._get_html(url))
+        title = soup.find("h1", {"class": "entry-title"}).text
+        url = soup.find("div", {"class": "video-layer"}).find("iframe")["src"]
+        return {"url": url, "title": title}
+
+    @staticmethod
+    def top_videos():
+        url = "https://www.alux.com/"
+        soup = Alux._get_soup(Alux._get_html(url))
+        for v in Alux.get_videos(soup):
+            yield v
+
+    @staticmethod
+    def trending_videos():
+        url = "https://www.alux.com/videos"
+        soup = Alux._get_soup(Alux._get_html(url))
+        for v in Alux.get_videos(soup):
+            yield v
+
+    @staticmethod
+    def hottest_videos():
+        url = "https://www.alux.com/videos/?sort=hottest"
+        soup = Alux._get_soup(Alux._get_html(url))
+        for v in Alux.get_videos(soup):
+            yield v
+
+    @staticmethod
+    def latest_videos():
+        url = "https://www.alux.com/videos/?sort=latest"
+        soup = Alux._get_soup(Alux._get_html(url))
+        for v in Alux.get_videos(soup):
+            yield v
