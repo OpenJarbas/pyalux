@@ -4,6 +4,13 @@ Home of Luxury & Fine Living Enthusiasts!
 
 Find luxury with this unofficial api for [Alux.com](https://www.alux.com/)
 
+wth pyalux you can find:
+
+* articles
+* videos
+* celebrities
+* net worth of rich people
+
 ## Install
 
     pip install pyalux
